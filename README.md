@@ -10,4 +10,4 @@ and ~ npm install for project-backend
 3. Run react project using:
 ~ npm start
 
-If you get any problems while execution. run ~npm install and npm start to execute server file which is outside the project-frontend and project-backend folder
+If you get any problems while execution. run ~npm install and npm start to start server file which is outside the project-frontend and project-backend folder
