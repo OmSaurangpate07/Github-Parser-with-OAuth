@@ -1,0 +1,162 @@
+* {
+    margin: 0;
+    padding: 0;
+  }
+  
+  body {
+    font-family: "Montserrat", sans-serif;
+  }
+  
+  .home-section {
+    height: 88vh;
+    width: 100%;
+    padding: 0;
+    /* border: 2px solid red; */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  ul,
+  h1 {
+    margin-left: 5px;
+  }
+  
+  .navbar {
+    height: 10vh;
+    display: flex;
+    align-items: center;
+    background-color: rgb(250, 227, 250);
+  }
+  
+  .login-image {
+    width: 75%;
+    /* border: 2px solid yellow; */
+  }
+  
+  .login-section {
+    height: 70vh;
+    width: 30%;
+    /* border: 2px solid blue; */
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    flex-direction: column;
+  }
+  
+  .login-title {
+    /* border: 2px solid black; */
+    width: 100%;
+    height: 7vh;
+    display: flex;
+    font-weight: 700;
+    font-size: 1.1rem;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .git-logo {
+    width: 10%;
+    /* background-color: white; */
+    width: 10%;
+    padding-left: 7px;
+    /* border: 2px white solid; */
+  }
+  
+  .git-image {
+    width: 25px;
+  }
+  
+  .login-button-section {
+    width: 75%;
+    /* border: 2px solid green; */
+    background-color: #616161;
+    color: white;
+    display: flex;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+  }
+  
+  .login-button-section:hover {
+    background-color: rgb(112, 112, 112);
+  }
+  
+  .login-button {
+    width: 100%;
+    height: 6vh;
+    align-items: center;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .git-title {
+    font-weight: 550;
+    font-size: 1rem;
+    width: 90%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* border: 2px solid yellow; */
+    padding-right: 27px;
+  }
+  
+
+  .Logout-button {
+    width: 100px;
+    height: 30px;
+    background-color: red;
+    color: black;
+    border: none;
+    border-radius: 6px;
+    /* margin: 10px; */
+    margin-right: 35px;
+    cursor: pointer;
+  }
+
+  .logout-button-area {
+    height: 10vh;
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 10px;
+  }
+
+  .get-data-button {
+    padding: 8px;
+    background-color: rgb(41, 41, 41);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    margin: 10px;
+    cursor: pointer;
+  }
+
+  .greeting {
+    height: 20vh;
+    width: 20%;
+    display: flex;
+    justify-content: center;
+    flex-direction: column;
+    /* align-items: center; */
+  }
+
+  .avatar-image {
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    /* margin: 5px */
+  }
+
+  .h1-greeting {
+    margin-left: 10px;
+  }
+
+  .user-link {
+    font-weight: 100;
+    text-decoration: none;
+    margin-left: 10px;
+  }
