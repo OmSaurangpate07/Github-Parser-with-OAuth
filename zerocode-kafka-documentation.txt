@@ -1,0 +1,190 @@
+********** ZEROCODE **********
+Module: kafka-testing
+
+Folder Structure:
+-src:
+    -main
+        -java/org/jsmart/zerocode
+            -Kafka
+                -MyCustomKafkaClient.java
+            -zerocodejavaexec/utils
+                -ExampleUtils.java
+    -proto
+        -persons.proto
+    -resources
+        -META-INF
+            -package.properties
+        -Logback.xml
+
+-pom.xml
+
+
+-> kafka-testing/src/main/java/org/jsmart/zerocode/kafka/MyCustomKafkaClient.java :
+
+// Code :
+package org.jsmart.zerocode.kafka;
+
+import org.jsmart.zerocode.core.engine.preprocessor.ScenarioExecutionState;
+import org.jsmart.zerocode.core.kafka.client.BasicKafkaClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.Is.is;
+
+public class MyCustomKafkaClient extends BasicKafkaClient {
+    private static final Logger LOGGER = LoggerFactory.getLogger(MyCustomKafkaClient.class);
+    private boolean customCodeExecuted;
+
+    public MyCustomKafkaClient() {
+        super();
+        LOGGER.debug("Running via Deloitte custom-Kafka-client...");
+    }
+
+    @Override
+    public String execute(String brokers, String topicName, String operation, String requestJson, ScenarioExecutionState scenarioExecutionState) {
+        customCodeExecuted = true;
+        // ---
+        // Use your custom send and receive mechanism here
+        // Or else,
+        // Code here your custom logic to manipulate brokers/topic/requestJson
+        // to prefix/enrich the messages etc.
+        // Then delegate to super.execute(...)
+        // ---
+
+        // Just a sanity check if flow has hit this point or not.
+        assertThat(customCodeExecuted, is(true));
+
+        return super.execute(brokers, topicName, operation, requestJson, scenarioExecutionState);
+    }
+}
+
+
+Explanation :
+This code defines a custom Kafka client class named MyCustomKafkaClient, which extends the BasicKafkaClient class. Let us understand the code below:
+
+// code
+** Package: ** 
+package org.jsmart.zerocode.kafka;
+
+// Import Statements
+import org.jsmart.zerocode.core.engine.preprocessor.ScenarioExecutionState;
+import org.jsmart.zerocode.core.kafka.client.BasicKafkaClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+This import statements gets necessary classes from the above package.
+
+
+** class Declaration: **
+public class MyCustomKafkaClient extends BasicKafkaClient {
+    private static final Logger LOGGER = LoggerFactory.getLogger(MyCustomKafkaClient.class);
+    private boolean customCodeExecuted;
+
+    public MyCustomKafkaClient() {
+        super();
+        LOGGER.debug("Running via Deloitte custom-Kafka-client...");
+    }
+}
+
+Here we declares a class named as MyCustomKafkaClient which extends to BasicKafkaClient.
+Extends means we can get access to properties of the BasicKafkaClient class. 
+
+Inside MyCustomeKafkaClient class there we declare a logger, Instance variable and constructor
+
+** Logger: **
+private static final Logger LOGGER = LoggerFactory.getLogger(MyCustomKafkaClient.class);
+
+Logger instance declared which will be used for logging messages.
+
+** Instance Variable: **
+private boolean customCodeExecuted;
+
+This boolean variable customCodeExecuted is used to track whether the custom code within the execute method has been executed or not.
+
+"" Constructor: **
+public MyCustomKafkaClient() {
+        super();
+        LOGGER.debug("Running via Deloitte custom-Kafka-client...");
+    }
+
+This constructor initializes the class. It first calls the constructor of the superclass “BasicKafkaClient” and then logs a debug message.
+
+** “execute” Method Override: **
+@Override
+    public String execute(String brokers, String topicName, String operation, String requestJson, ScenarioExecutionState scenarioExecutionState) {
+        customCodeExecuted = true;
+        // ---
+        // Use your custom send and receive mechanism here
+        // Or else,
+        // Code here your custom logic to manipulate brokers/topic/requestJson
+        // to prefix/enrich the messages etc.
+        // Then delegate to super.execute(...)
+        // ---
+
+        // Just a sanity check if flow has hit this point or not.
+        assertThat(customCodeExecuted, is(true));
+
+        return super.execute(brokers, topicName, operation, requestJson, scenarioExecutionState);
+    }
+}
+
+This method overrides the execute method from the superclass. It sets the customCodeExecuted variable to true, performs some custom logic which is commented out, asserts that customCodeExecuted is true for sanity check, and finally delegates the execution to the superclass method.
+
+
+-> kafka-testing/src/main/java/org/jsmart/zerocode/zerocodejavaexec/utils/ExampleUtils.java:
+Uses to get timestamp.
+
+// Code: 
+package org.jsmart.zerocode.zerocodejavaexec.utils;
+
+import org.jsmart.zerocode.core.kafka.consume.SeekTimestamp;
+
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+
+public class ExampleUtils {
+
+    public String seekTimestampToEpoch(SeekTimestamp seekTimestamp) throws ParseException {
+        DateFormat dateFormat = new SimpleDateFormat(seekTimestamp.getFormat());
+        return String.valueOf(dateFormat.parse(seekTimestamp.getTimestamp()).toInstant().toEpochMilli());
+    }
+}
+
+** Imports: ** 
+package org.jsmart.zerocode.zerocodejavaexec.utils;
+
+import org.jsmart.zerocode.core.kafka.consume.SeekTimestamp;
+
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+
+The code begins with a package declaration, specifying that the classes in this file belong to the package org.jsmart.zerocode.zerocodejavaexec.utils. It imports classes “SeekTimestamp” from org.jsmart.zerocode.core.kafka.consume, and “DateFormat”, “ParseException”, and “SimpleDateFormat” from java.text.
+
+** public class ExampleUtils: ** 
+public class ExampleUtils {
+
+    public String seekTimestampToEpoch(SeekTimestamp seekTimestamp) throws ParseException {
+        DateFormat dateFormat = new SimpleDateFormat(seekTimestamp.getFormat());
+        return String.valueOf(dateFormat.parse(seekTimestamp.getTimestamp()).toInstant().toEpochMilli());
+    }
+}
+
+Inside the “ExampleUtils” class, there is a method named as “seekTimestampToEpoch”. This method takes a single parameter of type “SeekTimestamp” and returns a String. It may throw a “ParseException”.
+
+Variable dateFormat holds an new Object which named as “SimpleDateFormat” SimpleDateFormat is format specified object.
+
+return String.valueOf(dateFormat.parse(seekTimestamp.getTimestamp()).toInstant().toEpochMilli());
+
+The above line parses the timestamp from the seekTimestamp object using the dateFormat. It then converts the parsed date into an Instant, and then into milliseconds since the epoch. Finally, it converts the result to a String using String.valueOf() method and returns it.
+
+
+-> kafka-testing/src/main/proto/Persons.proto:
+persons.proto file contains Schema definitions for representing person data or we can call it as person schema.
+
+
+-> kafka-testing/pom.xml:
+The pom.xml file is commonly used in Maven projects to define project settings, dependencies, and plugins.
+
