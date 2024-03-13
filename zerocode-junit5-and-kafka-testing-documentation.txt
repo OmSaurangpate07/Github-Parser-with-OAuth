@@ -1,0 +1,855 @@
+********** JUNIT5 TESTING **********
+
+Folder Structure: 
+
+-src
+    -main
+        -java/org/jsmart/zerocode/jupiter
+            -demo
+                -calculator.java
+            -extension
+                -ParallelLoadExtension.java
+            -listener
+                -ZerocodeTestReportJupiterListener.java
+            -load
+                -JupitorLoadProcessor.java
+    -Resources
+        -Logback.xml
+    -test
+        -java/org/jsmart/zerocode
+            -Jupiter
+                -demo
+                    -calculatorTest.java
+                -extension
+                    -ParallelLoadExtensionTest.java
+                -load
+                    -JupiterLoadProcessorTest.java
+            -tests
+                -junit4
+                    -GitHubHelloWorldTest.java
+                    -Junit4Test.java
+                -jupiter
+                    -Junit5Test.java
+                -loadjupiter
+                    -JUnit5LoadTest.java
+                -postgre
+                    -ExtensionA.java
+                    -ExtensionB.java
+
+-pom.xml
+
+
+->  junit5-testing/src/main/java/org/jsmart/zerocode/jupiter/demo/Calculator.java:
+
+//Code
+package org.jsmart.zerocode.jupiter.demo;
+public class Calculator {
+
+	public int add(int a, int b) {
+		return a + b;
+	}
+
+}
+
+It is a basic demo code of class which calculates arithmetic + operation.
+
+
+->  junit5-testing/src/main/java/org/jsmart/zerocode/jupiter/extension/ParallelLoadExtension.java
+
+// Code
+package org.jsmart.zerocode.jupiter.extension;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.lang.reflect.Method;
+import java.util.Arrays;
+import org.apiguardian.api.API;
+import org.jsmart.zerocode.core.di.provider.ObjectMapperProvider;
+import org.jsmart.zerocode.core.domain.LoadWith;
+import org.jsmart.zerocode.core.domain.TestMapping;
+import org.jsmart.zerocode.core.report.ZeroCodeReportGenerator;
+import org.jsmart.zerocode.core.report.ZeroCodeReportGeneratorImpl;
+import org.jsmart.zerocode.jupiter.load.JupiterLoadProcessor;
+import org.junit.jupiter.api.extension.BeforeEachCallback;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import static java.lang.String.format;
+import static org.apiguardian.api.API.Status.EXPERIMENTAL;
+import static org.junit.jupiter.api.Assertions.fail;
+
+/**
+ * This JUnit5 extension helps to generate load declaratively for performance testing. We can
+ * simply cherry-pick existing/new JUnit5 tests and run them in parallel as configured by the
+ * load-properties.
+ * <p>
+ * This class implements BeforeEachCallback(not BeforeAllCallback), because the load generation
+ * can be done for each test method. This way we don't need to create multiple load generation
+ * classes and add them into a Test-Suite runner. Instead, just create multiple test-methods with
+ * annotating with @Test(from Jupiter package) and @TestMappings(...).
+ * <p>
+ * Visit the Wiki page and HelloWorld repo on this for precise examples.
+ */
+@API(status = EXPERIMENTAL)
+public class ParallelLoadExtension implements BeforeEachCallback {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ParallelLoadExtension.class);
+    private final ObjectMapper mapper = new ObjectMapperProvider().get();
+    private final ZeroCodeReportGenerator reportGenerator = new ZeroCodeReportGeneratorImpl(mapper);
+
+    @Override
+    public void beforeEach(ExtensionContext extensionContext) throws Exception {
+        Method testMethod = extensionContext.getRequiredTestMethod();
+        Class<?> testClass = extensionContext.getRequiredTestClass();
+        String loadPropertiesFile = validateAndGetLoadPropertiesFile(testClass, testMethod);
+        JupiterLoadProcessor loadProcessor = new JupiterLoadProcessor(loadPropertiesFile);
+
+        //-------------------------------------------
+        //       On/Off Extent-Report switch
+        //-------------------------------------------
+        // Load the key 'chart.dashboard.generation'
+        // from 'loadPropertiesFile'
+        //-------------------------------------------
+        boolean chartAndDashBoardGenerationEnabled = false;
+
+
+        TestMapping[] testMappingArray = testMethod.getAnnotationsByType(TestMapping.class);
+
+        Arrays.stream(testMappingArray).forEach(thisMapping -> {
+            loadProcessor.addJupiterTest(thisMapping.testClass(), thisMapping.testMethod());
+        });
+
+        boolean hasFailed = loadProcessor.processMultiLoad();
+
+        reportGenerator.generateCsvReport();
+        if (chartAndDashBoardGenerationEnabled) {
+            reportGenerator.generateExtentReport();
+        }
+
+        if (hasFailed) {
+            failTest(testMethod, testClass);
+        } else {
+            LOGGER.debug("\nAll Passed \uD83D\uDC3C. \nSee the granular 'csv report' for individual test statistics.");
+        }
+
+    }
+
+    private void failTest(Method testMethod, Class<?> testClass) {
+        String failureMessage = testClass.getName() + " with load/stress test(s): " + testMethod + " have Failed";
+        LOGGER.error("\n" + failureMessage + ". \n\uD83D\uDC47" +
+                "\na) See the 'target/' for granular 'csv report' for pass/fail/response-delay statistics.\uD83D\uDE0E" +
+                "\n-Also- " +
+                "\nb) See the 'target/logs' for individual failures by their correlation-ID.\n\n");
+        String testDescription = testClass + "#" + testMethod;
+
+        fail(testDescription, new RuntimeException(failureMessage));
+    }
+
+    protected String validateAndGetLoadPropertiesFile(Class<?> testClass, Method method) {
+        LoadWith loadClassWith = testClass.getAnnotation(LoadWith.class);
+        LoadWith loadMethodWith = method.getAnnotation(LoadWith.class);
+
+        if (loadClassWith != null) {
+            return loadClassWith.value();
+        }
+
+        if (loadMethodWith != null) {
+            return loadMethodWith.value();
+        }
+
+        throw new RuntimeException(
+                format("\n<< Ah! Missing the the @LoadWith(...) on this Class '%s' or Method '%s' >> ",
+                        testClass.getName(), method.getName())
+        );
+
+    }
+
+}
+
+-   Explanation
+This Java code defines a JUnit 5 extension called ParallelLoadExtension. Let me break down the main components and functionalities of this code:
+
+In the above code their are various imports of classes and interfaces from different packages includes JUnit Jupiter (org.junit.jupiter.api), ZeroCode (org.jsmart.zerocode), SLF4J (org.slf4j), and Jackson (com.fasterxml.jackson.databind).
+
+-   Annotations:
+@API(status = EXPERIMENTAL): This annotation is from the org.apiguardian.api package and indicates that the extension is considered experimental.
+
+@Override: Indicates that the beforeEach method overrides a method declared in a superclass/interface.
+
+-   Fields:
+LOGGER: An instance of Logger from SLF4J for logging messages.
+mapper: An instance of ObjectMapper from Jackson for JSON serialization and deserialization.
+reportGenerator: An instance of ZeroCodeReportGenerator for generating test reports.
+beforeEach Method: This method is invoked before each test method execution.
+It retrieves the test method and test class information from the ExtensionContext.
+It validates and obtains the load properties file path using the validateAndGetLoadPropertiesFile method.
+It creates a JupiterLoadProcessor instance with the load properties file.
+It processes the load for each test mapping (defined by @TestMapping annotations).
+It generates CSV and potentially Extent reports based on configuration.
+If any test fails during load processing, it fails the test and logs an error message.
+
+-   Helper Methods:
+failTest: Logs an error message and fails the test.
+validateAndGetLoadPropertiesFile: Validates and retrieves the load properties file path either from the class-level or method-level @LoadWith annotation.
+
+
+->  junit5-testing/src/main/java/org/jsmart/zerocode/jupiter/listener/ZeroCodeTestReportJupiterListener.java:
+
+//Code
+package org.jsmart.zerocode.jupiter.listener;
+
+import java.time.LocalDateTime;
+import org.jsmart.zerocode.core.domain.builders.ZeroCodeExecReportBuilder;
+import org.jsmart.zerocode.core.domain.builders.ZeroCodeIoWriteBuilder;
+import org.jsmart.zerocode.core.logbuilder.ZerocodeCorrelationshipLogger;
+import org.junit.platform.engine.TestExecutionResult;
+import org.junit.platform.launcher.TestExecutionListener;
+import org.junit.platform.launcher.TestIdentifier;
+import org.junit.platform.launcher.TestPlan;
+import org.slf4j.Logger;
+
+import static java.time.LocalDateTime.now;
+import static org.jsmart.zerocode.core.domain.builders.ZeroCodeExecReportBuilder.newInstance;
+import static org.junit.platform.engine.TestExecutionResult.Status.FAILED;
+import static org.slf4j.LoggerFactory.getLogger;
+
+/**
+ * This class correlates between request and response of a test and creates easily traceable logs.
+ * Here, for each JUnit5 parallel tests this can be interpreted the following way-
+ * - a) Request timestamp - When the test started execution
+ * - b) Response timestamp - When the test finished execution
+ * - c) Response Delay(milli second) - (b-a) milli seconds
+ * - d) Scenario: Fully qualified name of the Test-Class
+ * - e) Step: Name of the Test-Method in the above Test-Class with @Test(jupiter package)
+ *
+ * Later the logs are written to the target folder as raw JSON files ready for rendering
+ * CSV-reports and Html-Chart/Dashboards
+ *
+ */
+public class ZeroCodeTestReportJupiterListener implements TestExecutionListener {
+    private static final Logger LOGGER = getLogger(ZeroCodeTestReportJupiterListener.class);
+
+    private final Class<?> testClass;
+    private final String testMethod;
+    private String testDescription;
+
+    private ZerocodeCorrelationshipLogger corrLogger;
+    private String logPrefixRelationshipId;
+    private boolean passed=true;
+
+    public ZeroCodeTestReportJupiterListener(Class<?> testClass, String testMethod) {
+        this.testClass = testClass;
+        this.testMethod = testMethod;
+        this.testDescription = testClass + "#" + testMethod;
+    }
+
+    @Override
+    public void testPlanExecutionStarted(TestPlan testPlan) {
+        logPrefixRelationshipId = prepareRequestReport(testDescription);
+    }
+
+    @Override
+    public void testPlanExecutionFinished(TestPlan testPlan) {
+        prepareResponseReport(logPrefixRelationshipId);
+        buildReportAndPrintToFile(testDescription);
+    }
+
+    @Override
+    public void executionFinished(TestIdentifier testIdentifier, TestExecutionResult testExecutionResult) {
+        if(testExecutionResult.getStatus().equals(FAILED)){
+            passed = false;
+        }
+    }
+
+    private String prepareRequestReport(String description) {
+        corrLogger = ZerocodeCorrelationshipLogger.newInstance(LOGGER);
+        corrLogger.stepLoop(0);
+        final String logPrefixRelationshipId = corrLogger.createRelationshipId();
+        LocalDateTime timeNow = now();
+        corrLogger.aRequestBuilder()
+                .stepLoop(0)
+                .relationshipId(logPrefixRelationshipId)
+                .requestTimeStamp(timeNow)
+                .step(testMethod);
+        LOGGER.info("JUnit5 *requestTimeStamp:{}, \nJUnit Request:{}", timeNow, logPrefixRelationshipId);
+        return logPrefixRelationshipId;
+    }
+
+    private void prepareResponseReport(String logPrefixRelationshipId) {
+        LocalDateTime timeNow = now();
+        LOGGER.info("JUnit5 *responseTimeStamp:{}, \nJUnit Response:{}", timeNow, logPrefixRelationshipId);
+        corrLogger.aResponseBuilder()
+                .relationshipId(logPrefixRelationshipId)
+                .responseTimeStamp(timeNow);
+        corrLogger.stepOutcome(passed);
+        corrLogger.buildResponseDelay();
+    }
+
+    private void buildReportAndPrintToFile(String description) {
+        ZeroCodeExecReportBuilder reportResultBuilder = newInstance().loop(0).scenarioName(testClass.getName());
+        reportResultBuilder.step(corrLogger.buildReportSingleStep());
+
+        ZeroCodeIoWriteBuilder reportBuilder = ZeroCodeIoWriteBuilder.newInstance().timeStamp(now());
+        reportBuilder.result(reportResultBuilder.build());
+
+        reportBuilder.printToFile(description + corrLogger.getCorrelationId() + ".json");
+    }
+
+}
+
+
+-   Explanation
+This Java code defines a JUnit 5 test execution listener named ZeroCodeTestReportJupiterListener. Let's go through its main components and functionalities:
+
+-   Imports: 
+The code imports necessary classes/interfaces from various packages including JUnit Platform (org.junit.platform.*), ZeroCode (org.jsmart.zerocode.*), and SLF4J (org.slf4j.*).
+
+-   Class Declaration: 
+The ZeroCodeTestReportJupiterListener class implements the TestExecutionListener interface from JUnit Platform.
+
+-   Fields:
+LOGGER: 
+An instance of Logger from SLF4J for logging messages.
+testClass: The class being tested.
+testMethod: The method being tested.
+testDescription: A combination of test class and method to describe the test.
+corrLogger: An instance of ZerocodeCorrelationshipLogger from ZeroCode for logging correlations between requests and responses.
+logPrefixRelationshipId: A string representing the correlation ID.
+passed: A boolean indicating whether the test passed or failed.
+
+-   Methods:
+testPlanExecutionStarted: Invoked when the test plan execution starts. It prepares the request report.
+testPlanExecutionFinished: Invoked when the test plan execution finishes. It prepares the response report and builds the final report.
+executionFinished: Invoked when a test execution finishes. It checks if the test passed or failed.
+prepareRequestReport: Prepares the request report by logging request details.
+prepareResponseReport: Prepares the response report by logging response details.
+buildReportAndPrintToFile: Builds the final report and prints it to a JSON file.
+
+Logging:
+The listener logs timestamps for request and response, along with correlation IDs.
+It logs information related to test execution, such as the test plan start and finish.
+Report Generation:
+The listener builds a JSON report containing information about test scenarios, steps, timestamps, and outcome.
+The report is written to a file in the target folder.
+
+
+->  junit5-testing/src/main/java/org/jsmart/zerocode/jupiter/load/JupiterLoadProcessor.java
+package org.jsmart.zerocode.jupiter.load;
+
+import org.jsmart.zerocode.core.runner.parallel.LoadProcessor;
+import org.jsmart.zerocode.jupiter.listener.ZeroCodeTestReportJupiterListener;
+import org.junit.platform.launcher.Launcher;
+import org.junit.platform.launcher.LauncherDiscoveryRequest;
+import org.junit.platform.launcher.TestIdentifier;
+import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder;
+import org.junit.platform.launcher.core.LauncherFactory;
+import org.junit.platform.launcher.listeners.SummaryGeneratingListener;
+import org.junit.platform.launcher.listeners.TestExecutionSummary;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import static java.time.LocalDateTime.now;
+import static org.junit.platform.engine.discovery.DiscoverySelectors.selectMethod;
+
+public class JupiterLoadProcessor extends LoadProcessor {
+    private static final Logger LOGGER = LoggerFactory.getLogger(JupiterLoadProcessor.class);
+
+    public JupiterLoadProcessor(String loadPropertiesFile) {
+        super(loadPropertiesFile);
+    }
+
+    public LoadProcessor addJupiterTest(Class<?> testClass, String testMethod) {
+
+        Runnable zeroCodeJunitTest = createJupiterRunnable(testClass, testMethod);
+
+        getExecutorServiceRunner().addRunnable(zeroCodeJunitTest);
+
+        return this;
+    }
+
+    public void updatePassFailCount(SummaryGeneratingListener summaryListener) {
+        TestExecutionSummary summary = summaryListener.getSummary();
+        if (summary.getTotalFailureCount() > 0) {
+            getFailedCounter().incrementAndGet();
+            summary.getFailures().forEach(thisFailure -> {
+                TestIdentifier testIdentifier = thisFailure.getTestIdentifier();
+                String exceptionMessage = thisFailure.getException().getMessage();
+                LOGGER.info("\n----------------------------------------------------------------------\n");
+                LOGGER.info("\n###JUnit5: Test Failed Due To --> {}, \ntestIdentifier={}", exceptionMessage, testIdentifier);
+                LOGGER.info("\n----------------------------------------------------------------------\n");
+            });
+        } else {
+            getPassedCounter().incrementAndGet();
+        }
+    }
+
+    private void registerReportListener(Class<?> testClass, String testMethod, Launcher launcher) {
+        ZeroCodeTestReportJupiterListener reportListener =
+                new ZeroCodeTestReportJupiterListener(testClass, testMethod );
+        launcher.registerTestExecutionListeners(reportListener);
+    }
+
+    private Runnable createJupiterRunnable(Class<?> testClass, String testMethod) {
+        return () -> {
+
+            LOGGER.debug(Thread.currentThread().getName() + "\n - Parallel Junit5 test- *Start-Time = " + now());
+
+            final LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
+                    .selectors(selectMethod(testClass, testMethod))
+                    .build();
+            final Launcher launcher = LauncherFactory.create();
+
+            // -------------------------
+            // Register Report listener
+            // -------------------------
+            registerReportListener(testClass, testMethod, launcher);
+
+            // ------------------------------
+            // Register Test-Summary listener
+            // ------------------------------
+            final SummaryGeneratingListener summaryListener = new SummaryGeneratingListener();
+            launcher.registerTestExecutionListeners(summaryListener);
+
+            launcher.execute(request);
+            LOGGER.debug(Thread.currentThread().getName() + "\n   - Parallel Junit5 test- *End-Time = " + now());
+
+            updatePassFailCount(summaryListener);
+
+        };
+    }
+}
+
+
+-   Explanation:
+This Java code appears to be a part of a test automation framework, specifically focusing on running and managing load tests using JUnit 5 and ZeroCode. Let's break down the code:
+
+-   Package Declaration:
+The code is part of the org.jsmart.zerocode.jupiter.load package.
+
+-   Imports:
+It imports various classes and interfaces from the JUnit Platform and ZeroCode libraries. Notably, it imports classes for test execution, listeners, and logging.
+
+-   Class Declaration: 
+-JupiterLoadProcessor:
+This class extends LoadProcessor, which suggests it's designed to handle load testing operations.
+It contains a LOGGER instance for logging purposes.
+
+-   Constructor:
+-public JupiterLoadProcessor(String loadPropertiesFile): This constructor initializes the load processor, taking a file name as a parameter. It presumably initializes the load testing environment.
+
+-   Method addJupiterTest:
+This method adds a JUnit 5 test to the load testing process.
+It takes a test class and test method as parameters and creates a Runnable instance to execute the test.
+-Method updatePassFailCount:
+This method updates the counters for passed and failed tests based on the summary generated by the test execution.
+It logs information about failed tests, including the test identifier and exception message.
+
+-   Private Methods:
+-registerReportListener: This method registers a custom test report listener (ZeroCodeTestReportJupiterListener) with the JUnit 5 launcher.
+-createJupiterRunnable: This method creates a Runnable instance to execute a JUnit 5 test. It configures the test execution, including selecting the test method and registering listeners.
+
+
+->  junit5-testing/src/test/java/org/jsmart/zerocode/jupiter/demo/CalculatorTest.java
+package org.jsmart.zerocode.jupiter.demo;
+
+import java.util.HashMap;
+import java.util.Map;
+import org.apache.commons.lang.text.StrSubstitutor;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+class CalculatorTest {
+
+    Calculator calculator = new Calculator();
+
+    @Test
+    @DisplayName("1 + 1 = 2")
+    void addsTwoNumbers() {
+        assertEquals(2, calculator.add(1, 1), "1 + 1 should equal 2");
+    }
+
+    @ParameterizedTest(name = "{0} + {1} = {2}")
+    @CsvSource({
+            "1,    2,   3",
+            "11,  22, 33"
+    })
+    void add(int first, int second, int expectedResult) {
+        Calculator calculator = new Calculator();
+        assertEquals(expectedResult, calculator.add(first, second),
+                () -> first + " + " + second + " should equal " + expectedResult);
+    }
+
+    @ParameterizedTest(name = "{0} + {1} = {2}")
+    @CsvSource({
+            "1,    2,   3",
+            "11,  22, 33",
+            "Hello World,  How, Hello World How"
+    })
+    void conCat(Object first, Object second, Object expectedResult) {
+        Calculator calculator = new Calculator();
+        System.out.println(first + "+" + second + "=" + expectedResult);
+    }
+
+    @ParameterizedTest(name = "run #{index} with [{arguments}]")
+    @ValueSource(strings = {"Hello", "JUnit"})
+    void withValueSource(String word) {
+        assertNotNull(word);
+    }
+
+    @Test
+    void testParamResolver() {
+        String WelcomeMessage="Hello ${firstName} ${lastName}!";
+        Map<String, String> valuesMap = new HashMap<>();
+        valuesMap.put("firstName", "Peter");
+        valuesMap.put("lastName", "Osi");
+        StrSubstitutor sub = new StrSubstitutor(valuesMap);
+        String message = sub.replace(WelcomeMessage);
+        assertEquals("Hello Peter Osi!", message);
+    }
+}
+
+-   Package Declaration:
+The code is in the package org.jsmart.zerocode.jupiter.demo.
+
+-   Imports:
+java.util.HashMap, java.util.Map: Imports classes for working with hash maps and maps.
+org.apache.commons.lang.text.StrSubstitutor: Imports a class from Apache Commons Lang for string substitution.
+Various imports related to JUnit Jupiter for writing tests and assertions.
+
+-   Class Declaration: 
+-CalculatorTest:
+This class contains test cases for a Calculator class.
+
+-Instance Variable:
+Calculator calculator = new Calculator();: Creates an instance of the Calculator class to be used in test methods.
+
+-   Test Methods:
+-addsTwoNumbers(): Tests the add method of the Calculator class by asserting that 1 + 1 equals 2.
+-add(int first, int second, int expectedResult): Parameterized test that verifies the add method of the Calculator class for multiple input combinations.
+-conCat(Object first, Object second, Object expectedResult): Parameterized test that does not contain assertions but prints the concatenation result.
+-withValueSource(String word): Parameterized test that uses @ValueSource to provide values for testing.
+-testParamResolver(): Tests string substitution using StrSubstitutor from Apache Commons Lang.
+
+-   Annotations:
+@Test: Marks a method as a test case.
+@DisplayName: Provides a custom display name for a test case.
+@ParameterizedTest: Indicates that a method is a parameterized test.
+@CsvSource: Provides comma-separated values for parameterized tests.
+@ValueSource: Provides a single value or multiple values for parameterized tests.
+
+-   Assertions:
+assertEquals(): Compares expected and actual values.
+assertNotNull(): Asserts that a value is not null.
+
+
+->  junit5-testing/src/test/java/org/jsmart/zerocode/jupiter/extension/ParallelLoadExtensionTest.java:
+package org.jsmart.zerocode.jupiter.extension;
+
+import java.lang.reflect.Method;
+import org.jsmart.zerocode.core.domain.LoadWith;
+import org.jsmart.zerocode.core.domain.TestMapping;
+import org.jsmart.zerocode.core.domain.TestMappings;
+import org.jsmart.zerocode.tests.jupiter.JUnit5Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class ParallelLoadExtensionTest {
+
+    @ExtendWith({ParallelLoadExtension.class})
+    public class JUnit5ExampleLoad {
+
+        @Test
+        //@LoadWith("load_generation.properties") //missing case
+        @TestMappings({
+                @TestMapping(testClass = JUnit5Test.class, testMethod = "testX"),
+                @TestMapping(testClass = JUnit5Test.class, testMethod = "testY")
+        })
+        public void testLoad() {
+            /* No code needed here */
+        }
+    }
+
+    @Test
+    void testValidation_exception() {
+        Class<JUnit5ExampleLoad> clazz = JUnit5ExampleLoad.class;
+        Method[] declaredMethods = clazz.getDeclaredMethods();
+        Method testMethod = declaredMethods[0]; // this is 'testLoad()'
+
+        ParallelLoadExtension parallelLoadExtension = new ParallelLoadExtension();
+        RuntimeException thrown =
+                assertThrows(RuntimeException.class,
+                        () -> parallelLoadExtension.validateAndGetLoadPropertiesFile(clazz, testMethod),
+                        "Expected to throw RuntimeException, but it didn't throw.");
+
+        assertTrue(thrown.getMessage().contains("Missing the the @LoadWith(...)"));
+    }
+
+    @ExtendWith({ParallelLoadExtension.class})
+    public class JUnit5ExampleLoad2 {
+
+        @Test
+        @LoadWith("load_generation.properties")
+        @TestMappings({
+                @TestMapping(testClass = JUnit5Test.class, testMethod = "testX"),
+                @TestMapping(testClass = JUnit5Test.class, testMethod = "testY")
+        })
+        public void testLoad() {
+            /* No code needed here */
+        }
+    }
+
+    @Test
+    void testLoadAnnotation_success() {
+        Class<JUnit5ExampleLoad2> clazz = JUnit5ExampleLoad2.class;
+        Method[] declaredMethods = clazz.getDeclaredMethods();
+        Method testMethod = declaredMethods[0]; // this is 'testLoad()'
+
+        ParallelLoadExtension parallelLoadExtension = new ParallelLoadExtension();
+        String loadPropertiesFile = parallelLoadExtension.validateAndGetLoadPropertiesFile(clazz, testMethod);
+
+        assertEquals("load_generation.properties", loadPropertiesFile);
+    }
+}
+
+-   Package Declaration:
+The code is in the package org.jsmart.zerocode.jupiter.extension.
+
+-   Imports:
+Imports various classes and annotations related to JUnit Jupiter testing framework and ZeroCode framework.
+
+-   Class Declaration: 
+-ParallelLoadExtensionTest:
+This class contains test cases for the ParallelLoadExtension class.
+
+-Inner Class: JUnit5ExampleLoad:
+
+-An inner class annotated with @ExtendWith(ParallelLoadExtension.class).
+-It contains a test method testLoad() annotated with @Test.
+-The testLoad() method does not contain any actual test code; it's used to test load generation.
+
+-   Test Methods:
+testValidation_exception(): Tests the validation logic of the ParallelLoadExtension class when the @LoadWith annotation is missing.
+testLoadAnnotation_success(): Tests that the ParallelLoadExtension class properly retrieves the load properties file when the @LoadWith annotation is present.
+
+-   Annotations:
+@ExtendWith: Indicates that the test class should use a specific JUnit Jupiter extension during execution.
+@Test: Marks a method as a test case.
+@LoadWith: Specifies the properties file to be used for load generation.
+@TestMappings: Provides mappings for test classes and methods for load generation.
+
+-   Assertions:
+assertThrows(): Asserts that a particular exception is thrown during execution.
+assertTrue(): Asserts that a condition is true.
+assertEquals(): Asserts that two values are equal.
+
+-   Logic:
+JUnit5ExampleLoad2 is similar to JUnit5ExampleLoad, but it includes the @LoadWith annotation.
+
+-   Test Execution:
+-In testValidation_exception(), it checks if the validation logic properly throws a RuntimeException when the @LoadWith annotation is missing.
+-In testLoadAnnotation_success(), it verifies that the ParallelLoadExtension class correctly retrieves the load properties file when the @LoadWith annotation is present.
+
+
+
+
+
+
+********** Kafka-testing **********
+Module: kafka-testing
+
+Folder Structure:
+-src:
+    -main
+        -java/org/jsmart/zerocode
+            -Kafka
+                -MyCustomKafkaClient.java
+            -zerocodejavaexec/utils
+                -ExampleUtils.java
+    -proto
+        -persons.proto
+    -resources
+        -META-INF
+            -package.properties
+        -Logback.xml
+
+-pom.xml
+
+
+->  kafka-testing/src/main/java/org/jsmart/zerocode/kafka/MyCustomKafkaClient.java :
+
+// Code :
+package org.jsmart.zerocode.kafka;
+
+import org.jsmart.zerocode.core.engine.preprocessor.ScenarioExecutionState;
+import org.jsmart.zerocode.core.kafka.client.BasicKafkaClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.Is.is;
+
+public class MyCustomKafkaClient extends BasicKafkaClient {
+    private static final Logger LOGGER = LoggerFactory.getLogger(MyCustomKafkaClient.class);
+    private boolean customCodeExecuted;
+
+    public MyCustomKafkaClient() {
+        super();
+        LOGGER.debug("Running via Deloitte custom-Kafka-client...");
+    }
+
+    @Override
+    public String execute(String brokers, String topicName, String operation, String requestJson, ScenarioExecutionState scenarioExecutionState) {
+        customCodeExecuted = true;
+        // ---
+        // Use your custom send and receive mechanism here
+        // Or else,
+        // Code here your custom logic to manipulate brokers/topic/requestJson
+        // to prefix/enrich the messages etc.
+        // Then delegate to super.execute(...)
+        // ---
+
+        // Just a sanity check if flow has hit this point or not.
+        assertThat(customCodeExecuted, is(true));
+
+        return super.execute(brokers, topicName, operation, requestJson, scenarioExecutionState);
+    }
+}
+
+
+-   Explanation :
+This code defines a custom Kafka client class named MyCustomKafkaClient, which extends the BasicKafkaClient class. Let us understand the code below:
+
+// code
+** Package: ** 
+package org.jsmart.zerocode.kafka;
+
+// Import Statements
+import org.jsmart.zerocode.core.engine.preprocessor.ScenarioExecutionState;
+import org.jsmart.zerocode.core.kafka.client.BasicKafkaClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+This import statements gets necessary classes from the above package.
+
+
+** class Declaration: **
+public class MyCustomKafkaClient extends BasicKafkaClient {
+    private static final Logger LOGGER = LoggerFactory.getLogger(MyCustomKafkaClient.class);
+    private boolean customCodeExecuted;
+
+    public MyCustomKafkaClient() {
+        super();
+        LOGGER.debug("Running via Deloitte custom-Kafka-client...");
+    }
+}
+
+Here we declares a class named as MyCustomKafkaClient which extends to BasicKafkaClient.
+Extends means we can get access to properties of the BasicKafkaClient class. 
+
+Inside MyCustomeKafkaClient class there we declare a logger, Instance variable and constructor
+
+** Logger: **
+private static final Logger LOGGER = LoggerFactory.getLogger(MyCustomKafkaClient.class);
+
+Logger instance declared which will be used for logging messages.
+
+** Instance Variable: **
+private boolean customCodeExecuted;
+
+This boolean variable customCodeExecuted is used to track whether the custom code within the execute method has been executed or not.
+
+"" Constructor: **
+public MyCustomKafkaClient() {
+        super();
+        LOGGER.debug("Running via Deloitte custom-Kafka-client...");
+    }
+
+This constructor initializes the class. It first calls the constructor of the superclass “BasicKafkaClient” and then logs a debug message.
+
+** “execute” Method Override: **
+@Override
+    public String execute(String brokers, String topicName, String operation, String requestJson, ScenarioExecutionState scenarioExecutionState) {
+        customCodeExecuted = true;
+        // ---
+        // Use your custom send and receive mechanism here
+        // Or else,
+        // Code here your custom logic to manipulate brokers/topic/requestJson
+        // to prefix/enrich the messages etc.
+        // Then delegate to super.execute(...)
+        // ---
+
+        // Just a sanity check if flow has hit this point or not.
+        assertThat(customCodeExecuted, is(true));
+
+        return super.execute(brokers, topicName, operation, requestJson, scenarioExecutionState);
+    }
+}
+
+This method overrides the execute method from the superclass. It sets the customCodeExecuted variable to true, performs some custom logic which is commented out, asserts that customCodeExecuted is true for sanity check, and finally delegates the execution to the superclass method.
+
+
+-> kafka-testing/src/main/java/org/jsmart/zerocode/zerocodejavaexec/utils/ExampleUtils.java:
+Uses to get timestamp.
+
+// Code: 
+package org.jsmart.zerocode.zerocodejavaexec.utils;
+
+import org.jsmart.zerocode.core.kafka.consume.SeekTimestamp;
+
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+
+public class ExampleUtils {
+
+    public String seekTimestampToEpoch(SeekTimestamp seekTimestamp) throws ParseException {
+        DateFormat dateFormat = new SimpleDateFormat(seekTimestamp.getFormat());
+        return String.valueOf(dateFormat.parse(seekTimestamp.getTimestamp()).toInstant().toEpochMilli());
+    }
+}
+
+** Imports: ** 
+package org.jsmart.zerocode.zerocodejavaexec.utils;
+
+import org.jsmart.zerocode.core.kafka.consume.SeekTimestamp;
+
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+
+The code begins with a package declaration, specifying that the classes in this file belong to the package org.jsmart.zerocode.zerocodejavaexec.utils. It imports classes “SeekTimestamp” from org.jsmart.zerocode.core.kafka.consume, and “DateFormat”, “ParseException”, and “SimpleDateFormat” from java.text.
+
+** public class ExampleUtils: ** 
+public class ExampleUtils {
+
+    public String seekTimestampToEpoch(SeekTimestamp seekTimestamp) throws ParseException {
+        DateFormat dateFormat = new SimpleDateFormat(seekTimestamp.getFormat());
+        return String.valueOf(dateFormat.parse(seekTimestamp.getTimestamp()).toInstant().toEpochMilli());
+    }
+}
+
+Inside the “ExampleUtils” class, there is a method named as “seekTimestampToEpoch”. This method takes a single parameter of type “SeekTimestamp” and returns a String. It may throw a “ParseException”.
+
+Variable dateFormat holds an new Object which named as “SimpleDateFormat” SimpleDateFormat is format specified object.
+
+return String.valueOf(dateFormat.parse(seekTimestamp.getTimestamp()).toInstant().toEpochMilli());
+
+The above line parses the timestamp from the seekTimestamp object using the dateFormat. It then converts the parsed date into an Instant, and then into milliseconds since the epoch. Finally, it converts the result to a String using String.valueOf() method and returns it.
+
+
+->  kafka-testing/src/main/proto/Persons.proto:
+persons.proto file contains Schema definitions for representing person data or we can call it as person schema.
+
+
+->  kafka-testing/pom.xml:
+The pom.xml file is commonly used in Maven projects to define project settings, dependencies, and plugins.
+
